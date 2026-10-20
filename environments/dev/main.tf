@@ -31,7 +31,7 @@ module "s3_bucket" {
 module "iam_role" {
   source = "../../modules/iam-role"
 
-  role_name        = var.iam_role_name
+  role_name         = var.iam_role_name
   service_principal = "ec2.amazonaws.com"
 
   tags = {
