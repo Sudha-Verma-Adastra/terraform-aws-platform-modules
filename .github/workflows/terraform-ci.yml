@@ -50,6 +50,9 @@ jobs:
       - name: Validate IAM module
         run: terraform -chdir=modules/iam-role validate
 
+      - name: Test IAM module
+        run: terraform -chdir=modules/iam-role test
+
       - name: Initialize development environment
         run: terraform -chdir=environments/dev init -backend=false
 

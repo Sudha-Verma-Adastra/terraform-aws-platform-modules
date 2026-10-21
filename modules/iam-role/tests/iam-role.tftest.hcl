@@ -1,0 +1,137 @@
+mock_provider "aws" {
+  override_during = plan
+
+  mock_resource "aws_iam_role" {
+    defaults = {
+      id       = "test-role-id"
+      arn      = "arn:aws:iam::123456789012:role/test-platform-role"
+      unique_id = "AROAEXAMPLEID"
+    }
+  }
+
+  mock_data "aws_iam_policy_document" {
+    defaults = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRole\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"}}]}"
+    }
+  }
+}
+
+run "valid_iam_role" {
+  command = plan
+
+  variables {
+    role_name        = "test-platform-role"
+    service_principal = "lambda.amazonaws.com"
+  }
+
+  assert {
+    condition     = aws_iam_role.this.name == "test-platform-role"
+    error_message = "The IAM role must use the configured role name."
+  }
+
+  assert {
+    condition = (
+      jsondecode(aws_iam_role.this.assume_role_policy)
+        .Statement[0].Principal.Service == "lambda.amazonaws.com"
+    )
+    error_message = "The role trust policy must name the configured Lambda service principal."
+  }
+
+  assert {
+    condition = (
+      jsondecode(aws_iam_role.this.assume_role_policy)
+        .Statement[0].Action == "sts:AssumeRole"
+    )
+    error_message = "The trust policy must allow sts:AssumeRole."
+  }
+}
+
+run "attach_managed_policies" {
+  command = plan
+
+  variables {
+    role_name         = "test-platform-role"
+    service_principal = "lambda.amazonaws.com"
+    managed_policy_arns = [
+      "arn:aws:iam::aws:policy/ReadOnlyAccess",
+      "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+    ]
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy_attachment.managed) == 2
+    error_message = "Each configured managed policy must create an attachment."
+  }
+}
+
+run "omit_inline_policy_when_null" {
+  command = plan
+
+  variables {
+    role_name         = "test-platform-role"
+    service_principal = "lambda.amazonaws.com"
+    inline_policy_json = null
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.inline) == 0
+    error_message = "No inline policy resource should be created when inline_policy_json is null."
+  }
+}
+
+run "create_inline_policy_when_provided" {
+  command = plan
+
+  variables {
+    role_name         = "test-platform-role"
+    service_principal = "lambda.amazonaws.com"
+    inline_policy_json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:ListBucket\",\"Resource\":\"arn:aws:s3:::example-bucket\"}]}"
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.inline) == 1
+    error_message = "An inline policy resource must be created when a policy is provided."
+  }
+
+  assert {
+    condition = (
+      jsondecode(aws_iam_role_policy.inline[0].policy)
+        .Statement[0].Action == "s3:ListBucket"
+    )
+    error_message = "The inline policy must preserve the configured permission."
+  }
+}
+
+run "reject_invalid_role_name" {
+  command = plan
+
+  variables {
+    role_name         = "invalid role name"
+    service_principal = "lambda.amazonaws.com"
+  }
+
+  expect_failures = [var.role_name]
+}
+
+run "reject_invalid_service_principal" {
+  command = plan
+
+  variables {
+    role_name         = "test-platform-role"
+    service_principal = "lambda"
+  }
+
+  expect_failures = [var.service_principal]
+}
+
+run "reject_malformed_inline_policy_json" {
+  command = plan
+
+  variables {
+    role_name          = "test-platform-role"
+    service_principal  = "lambda.amazonaws.com"
+    inline_policy_json = "{not-valid-json}"
+  }
+
+  expect_failures = [var.inline_policy_json]
+}
