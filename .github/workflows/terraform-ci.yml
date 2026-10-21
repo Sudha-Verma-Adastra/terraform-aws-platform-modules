@@ -21,7 +21,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.9.8"
+          terraform_version: "1.13.3"
 
       - name: Check formatting
         run: terraform fmt -check -recursive
@@ -31,6 +31,9 @@ jobs:
 
       - name: Validate VPC module
         run: terraform -chdir=modules/vpc validate
+
+      - name: Test VPC module
+        run: terraform -chdir=modules/vpc test
 
       - name: Initialize S3 module
         run: terraform -chdir=modules/s3-bucket init -backend=false
@@ -60,7 +63,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.9.8"
+          terraform_version: "1.13.3"
 
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@v4
