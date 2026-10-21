@@ -3,8 +3,8 @@ mock_provider "aws" {
 
   mock_resource "aws_iam_role" {
     defaults = {
-      id       = "test-role-id"
-      arn      = "arn:aws:iam::123456789012:role/test-platform-role"
+      id        = "test-role-id"
+      arn       = "arn:aws:iam::123456789012:role/test-platform-role"
       unique_id = "AROAEXAMPLEID"
     }
   }
@@ -20,7 +20,7 @@ run "valid_iam_role" {
   command = plan
 
   variables {
-    role_name        = "test-platform-role"
+    role_name         = "test-platform-role"
     service_principal = "lambda.amazonaws.com"
   }
 
@@ -32,7 +32,7 @@ run "valid_iam_role" {
   assert {
     condition = (
       jsondecode(aws_iam_role.this.assume_role_policy)
-        .Statement[0].Principal.Service == "lambda.amazonaws.com"
+      .Statement[0].Principal.Service == "lambda.amazonaws.com"
     )
     error_message = "The role trust policy must name the configured Lambda service principal."
   }
@@ -40,7 +40,7 @@ run "valid_iam_role" {
   assert {
     condition = (
       jsondecode(aws_iam_role.this.assume_role_policy)
-        .Statement[0].Action == "sts:AssumeRole"
+      .Statement[0].Action == "sts:AssumeRole"
     )
     error_message = "The trust policy must allow sts:AssumeRole."
   }
@@ -68,8 +68,8 @@ run "omit_inline_policy_when_null" {
   command = plan
 
   variables {
-    role_name         = "test-platform-role"
-    service_principal = "lambda.amazonaws.com"
+    role_name          = "test-platform-role"
+    service_principal  = "lambda.amazonaws.com"
     inline_policy_json = null
   }
 
@@ -83,8 +83,8 @@ run "create_inline_policy_when_provided" {
   command = plan
 
   variables {
-    role_name         = "test-platform-role"
-    service_principal = "lambda.amazonaws.com"
+    role_name          = "test-platform-role"
+    service_principal  = "lambda.amazonaws.com"
     inline_policy_json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:ListBucket\",\"Resource\":\"arn:aws:s3:::example-bucket\"}]}"
   }
 
@@ -96,7 +96,7 @@ run "create_inline_policy_when_provided" {
   assert {
     condition = (
       jsondecode(aws_iam_role_policy.inline[0].policy)
-        .Statement[0].Action == "s3:ListBucket"
+      .Statement[0].Action == "s3:ListBucket"
     )
     error_message = "The inline policy must preserve the configured permission."
   }
