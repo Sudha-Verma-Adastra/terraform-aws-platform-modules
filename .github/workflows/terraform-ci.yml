@@ -40,6 +40,9 @@ jobs:
 
       - name: Validate S3 module
         run: terraform -chdir=modules/s3-bucket validate
+      
+      - name: Test S3 module
+        run: terraform -chdir=modules/s3-bucket test
 
       - name: Initialize IAM module
         run: terraform -chdir=modules/iam-role init -backend=false
