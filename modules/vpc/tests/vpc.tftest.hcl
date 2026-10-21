@@ -261,7 +261,7 @@ run "verify_private_route_tables_have_no_internet_gateway_route" {
   }
 
   assert {
-    condition = length(aws_route_table.private) == 2
+    condition     = length(aws_route_table.private) == 2
     error_message = "Two private route tables must be created for the two private subnets."
   }
 
