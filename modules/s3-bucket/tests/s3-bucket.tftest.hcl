@@ -81,7 +81,7 @@ run "deny_insecure_transport" {
   assert {
     condition = (
       jsondecode(aws_s3_bucket_policy.tls_only.policy)
-        .Statement[0].Effect == "Deny"
+      .Statement[0].Effect == "Deny"
     )
     error_message = "The transport security policy must explicitly deny insecure requests."
   }
@@ -89,7 +89,7 @@ run "deny_insecure_transport" {
   assert {
     condition = (
       jsondecode(aws_s3_bucket_policy.tls_only.policy)
-        .Statement[0].Condition.Bool["aws:SecureTransport"] == "false"
+      .Statement[0].Condition.Bool["aws:SecureTransport"] == "false"
     )
     error_message = "The policy must deny requests when aws:SecureTransport is false."
   }
