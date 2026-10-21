@@ -39,3 +39,32 @@ module "iam_role" {
     Owner       = "platform-engineering"
   }
 }
+
+module "eks" {
+  source = "../../modules/eks"
+
+  cluster_name    = var.eks_cluster_name
+  cluster_version = var.eks_cluster_version
+
+  # Reuse private subnets spanning at least two Availability Zones.
+  cluster_subnet_ids = module.vpc.private_subnet_ids
+  node_subnet_ids    = module.vpc.private_subnet_ids
+
+  endpoint_private_access = true
+  endpoint_public_access  = false
+
+  node_group_name = "workers"
+  instance_types  = ["t3.medium"]
+  capacity_type   = "ON_DEMAND"
+
+  min_size     = 1
+  desired_size = 2
+  max_size     = 3
+  disk_size    = 20
+
+  tags = {
+    Environment = "dev"
+    ManagedBy   = "Terraform"
+    Project     = "terraform-aws-platform-modules"
+  }
+}

@@ -50,3 +50,19 @@ variable "iam_role_name" {
   type        = string
   default     = "platform-dev-example-role"
 }
+
+variable "eks_cluster_name" {
+  description = "Name for the development EKS cluster."
+  type        = string
+  default     = "platform-dev-eks"
+}
+
+variable "eks_cluster_version" {
+  description = "Currently supported Kubernetes version for EKS in the configured AWS region."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+$", var.eks_cluster_version))
+    error_message = "eks_cluster_version must use major.minor format, for example 1.XX."
+  }
+}

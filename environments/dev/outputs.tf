@@ -27,3 +27,23 @@ output "iam_role_arn" {
   description = "ARN of the example IAM role."
   value       = module.iam_role.role_arn
 }
+
+output "eks_cluster_name" {
+  description = "Name of the development EKS cluster."
+  value       = module.eks.cluster_name
+}
+
+output "eks_cluster_arn" {
+  description = "ARN of the development EKS cluster."
+  value       = module.eks.cluster_arn
+}
+
+output "eks_cluster_endpoint" {
+  description = "Private Kubernetes API endpoint for the development cluster."
+  value       = module.eks.cluster_endpoint
+}
+
+output "eks_node_group_name" {
+  description = "Name of the development EKS managed node group."
+  value       = module.eks.node_group_name
+}

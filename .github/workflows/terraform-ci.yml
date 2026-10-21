@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   terraform-checks:
-    name: Format and Validate
+    name: Format, Validate and Test
     runs-on: ubuntu-latest
 
     steps:
@@ -40,7 +40,7 @@ jobs:
 
       - name: Validate S3 module
         run: terraform -chdir=modules/s3-bucket validate
-      
+
       - name: Test S3 module
         run: terraform -chdir=modules/s3-bucket test
 
@@ -53,11 +53,21 @@ jobs:
       - name: Test IAM module
         run: terraform -chdir=modules/iam-role test
 
+      - name: Initialize EKS module
+        run: terraform -chdir=modules/eks init -backend=false
+
+      - name: Validate EKS module
+        run: terraform -chdir=modules/eks validate
+
+      - name: Test EKS module
+        run: terraform -chdir=modules/eks test
+
       - name: Initialize development environment
         run: terraform -chdir=environments/dev init -backend=false
 
       - name: Validate development environment
         run: terraform -chdir=environments/dev validate
+
   terraform-security:
     name: Terraform Lint and Security
     runs-on: ubuntu-latest
