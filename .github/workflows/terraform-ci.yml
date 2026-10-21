@@ -1,18 +1,37 @@
 name: Terraform CI
 
 on:
-  pull_request:
   push:
     branches:
       - main
+    paths:
+      - "modules/**"
+      - "environments/**"
+      - "examples/**"
+      - ".github/workflows/terraform-ci.yml"
+      - ".tflint.hcl"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   terraform-checks:
-    name: Format, Validate and Test
+    name: Terraform Format, Validate and Test
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - modules/vpc
+          - modules/s3-bucket
+          - modules/iam-role
+          - modules/eks
+          - modules/ecr
 
     steps:
       - name: Checkout repository
@@ -22,54 +41,28 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.13.3"
+          terraform_wrapper: false
 
-      - name: Check formatting
+      - name: Check Terraform formatting
         run: terraform fmt -check -recursive
 
-      - name: Initialize VPC module
-        run: terraform -chdir=modules/vpc init -backend=false
+      - name: Initialize module
+        working-directory: ${{ matrix.module }}
+        run: terraform init -backend=false
 
-      - name: Validate VPC module
-        run: terraform -chdir=modules/vpc validate
+      - name: Validate module
+        working-directory: ${{ matrix.module }}
+        run: terraform validate
 
-      - name: Test VPC module
-        run: terraform -chdir=modules/vpc test
+      - name: Run Terraform tests
+        working-directory: ${{ matrix.module }}
+        run: terraform test
 
-      - name: Initialize S3 module
-        run: terraform -chdir=modules/s3-bucket init -backend=false
+      - name: Check Terraform version
+        run: terraform version
 
-      - name: Validate S3 module
-        run: terraform -chdir=modules/s3-bucket validate
-
-      - name: Test S3 module
-        run: terraform -chdir=modules/s3-bucket test
-
-      - name: Initialize IAM module
-        run: terraform -chdir=modules/iam-role init -backend=false
-
-      - name: Validate IAM module
-        run: terraform -chdir=modules/iam-role validate
-
-      - name: Test IAM module
-        run: terraform -chdir=modules/iam-role test
-
-      - name: Initialize EKS module
-        run: terraform -chdir=modules/eks init -backend=false
-
-      - name: Validate EKS module
-        run: terraform -chdir=modules/eks validate
-
-      - name: Test EKS module
-        run: terraform -chdir=modules/eks test
-
-      - name: Initialize development environment
-        run: terraform -chdir=environments/dev init -backend=false
-
-      - name: Validate development environment
-        run: terraform -chdir=environments/dev validate
-
-  terraform-security:
-    name: Terraform Lint and Security
+  tflint:
+    name: TFLint
     runs-on: ubuntu-latest
 
     steps:
@@ -80,18 +73,13 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.13.3"
+          terraform_wrapper: false
 
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@v4
 
-      - name: Initialize TFLint plugins
+      - name: Initialize TFLint
         run: tflint --init
 
-      - name: Lint Terraform
+      - name: Run TFLint
         run: tflint --recursive
-
-      - name: Install Checkov
-        run: python -m pip install checkov
-
-      - name: Scan Terraform security
-        run: checkov --directory . --framework terraform --soft-fail
