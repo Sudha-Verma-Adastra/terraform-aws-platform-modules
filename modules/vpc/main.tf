@@ -21,6 +21,72 @@ locals {
       cidr_block        = var.private_subnet_cidrs[index]
     }
   }
+
+  all_subnet_cidrs = concat(
+    var.public_subnet_cidrs,
+    var.private_subnet_cidrs
+  )
+
+  vpc_start_ip = try(cidrhost(var.vpc_cidr, 0), "0.0.0.0")
+  vpc_end_ip   = try(cidrhost(var.vpc_cidr, -1), "0.0.0.0")
+
+  vpc_start_num = (
+    tonumber(split(".", local.vpc_start_ip)[0]) * 16777216 +
+    tonumber(split(".", local.vpc_start_ip)[1]) * 65536 +
+    tonumber(split(".", local.vpc_start_ip)[2]) * 256 +
+    tonumber(split(".", local.vpc_start_ip)[3])
+  )
+
+  vpc_end_num = (
+    tonumber(split(".", local.vpc_end_ip)[0]) * 16777216 +
+    tonumber(split(".", local.vpc_end_ip)[1]) * 65536 +
+    tonumber(split(".", local.vpc_end_ip)[2]) * 256 +
+    tonumber(split(".", local.vpc_end_ip)[3])
+  )
+
+  subnet_ranges = [
+    for cidr in local.all_subnet_cidrs : {
+      cidr     = cidr
+      start_ip = try(cidrhost(cidr, 0), "0.0.0.0")
+      end_ip   = try(cidrhost(cidr, -1), "0.0.0.0")
+
+      start_num = try(
+        tonumber(split(".", cidrhost(cidr, 0))[0]) * 16777216 +
+        tonumber(split(".", cidrhost(cidr, 0))[1]) * 65536 +
+        tonumber(split(".", cidrhost(cidr, 0))[2]) * 256 +
+        tonumber(split(".", cidrhost(cidr, 0))[3]),
+        -1
+      )
+
+      end_num = try(
+        tonumber(split(".", cidrhost(cidr, -1))[0]) * 16777216 +
+        tonumber(split(".", cidrhost(cidr, -1))[1]) * 65536 +
+        tonumber(split(".", cidrhost(cidr, -1))[2]) * 256 +
+        tonumber(split(".", cidrhost(cidr, -1))[3]),
+        -1
+      )
+    }
+  ]
+  subnet_cidrs_are_non_overlapping = alltrue(flatten([
+    for i, subnet_a in local.subnet_ranges : [
+      for j, subnet_b in local.subnet_ranges :
+      i == j ? true : (
+        subnet_a.end_num < subnet_b.start_num ||
+        subnet_b.end_num < subnet_a.start_num
+      )
+    ]
+  ]))
+
+  subnet_cidrs_are_within_vpc = (
+    !can(cidrnetmask(var.vpc_cidr)) ||
+    alltrue([
+      for subnet in local.subnet_ranges :
+      !can(cidrnetmask(subnet.cidr)) || (
+        subnet.start_num >= local.vpc_start_num &&
+        subnet.end_num <= local.vpc_end_num
+      )
+    ])
+  )
 }
 
 resource "aws_vpc" "this" {
@@ -34,14 +100,6 @@ resource "aws_vpc" "this" {
 
   lifecycle {
     precondition {
-      condition = (
-        length(var.public_subnet_cidrs) == length(var.availability_zones) &&
-        length(var.private_subnet_cidrs) == length(var.availability_zones)
-      )
-      error_message = "Public and private subnet CIDR lists must each have one entry per Availability Zone."
-    }
-
-    precondition {
       condition = length(distinct(concat(
         var.public_subnet_cidrs,
         var.private_subnet_cidrs
@@ -50,6 +108,15 @@ resource "aws_vpc" "this" {
         length(var.private_subnet_cidrs)
       )
       error_message = "Subnet CIDR blocks must not be duplicated."
+    }
+    precondition {
+      condition     = local.subnet_cidrs_are_within_vpc
+      error_message = "Every subnet CIDR must be contained within the VPC CIDR."
+    }
+
+    precondition {
+      condition     = local.subnet_cidrs_are_non_overlapping
+      error_message = "Subnet CIDR blocks must not overlap."
     }
   }
 }
