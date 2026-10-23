@@ -8,12 +8,6 @@ mock_provider "aws" {
       unique_id = "AROAEXAMPLEID"
     }
   }
-
-  mock_data "aws_iam_policy_document" {
-    defaults = {
-      json = "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRole\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"}}]}"
-    }
-  }
 }
 
 run "valid_iam_role" {
@@ -134,4 +128,71 @@ run "reject_malformed_inline_policy_json" {
   }
 
   expect_failures = [var.inline_policy_json]
+}
+
+run "oidc_trust_policy_is_restricted" {
+  command = plan
+
+  variables {
+    role_name         = "test-alb-controller-role"
+    service_principal = "lambda.amazonaws.com"
+    trust_type        = "oidc"
+    oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE123"
+    oidc_issuer_url   = "https://oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE123"
+    oidc_subject      = "system:serviceaccount:kube-system:aws-load-balancer-controller"
+    oidc_audience     = "sts.amazonaws.com"
+  }
+
+  assert {
+    condition = (
+      jsondecode(aws_iam_role.this.assume_role_policy)
+      .Statement[0].Action == "sts:AssumeRoleWithWebIdentity"
+    )
+    error_message = "OIDC trust must use sts:AssumeRoleWithWebIdentity."
+  }
+
+  assert {
+    condition = (
+      jsondecode(aws_iam_role.this.assume_role_policy)
+      .Statement[0].Principal.Federated ==
+      "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE123"
+    )
+    error_message = "OIDC trust must use the configured federated provider."
+  }
+
+  assert {
+    condition = (
+      jsondecode(aws_iam_role.this.assume_role_policy)
+      .Statement[0].Condition.StringEquals[
+        "oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE123:sub"
+      ][0] ==
+      "system:serviceaccount:kube-system:aws-load-balancer-controller"
+    )
+    error_message = "OIDC trust must restrict assumption to the specified service account."
+  }
+
+  assert {
+    condition = (
+      jsondecode(aws_iam_role.this.assume_role_policy)
+      .Statement[0].Condition.StringEquals[
+        "oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE123:aud"
+      ][0] == "sts.amazonaws.com"
+    )
+    error_message = "OIDC trust must restrict the audience to sts.amazonaws.com."
+  }
+}
+
+run "reject_oidc_trust_without_required_inputs" {
+  command = plan
+
+  variables {
+    role_name         = "test-alb-controller-role"
+    service_principal = "lambda.amazonaws.com"
+    trust_type        = "oidc"
+    oidc_provider_arn = null
+    oidc_issuer_url   = null
+    oidc_subject      = null
+  }
+
+  expect_failures = [aws_iam_role.this]
 }

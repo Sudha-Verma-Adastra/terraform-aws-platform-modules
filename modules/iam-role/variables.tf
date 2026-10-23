@@ -44,3 +44,41 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "trust_type" {
+  description = "Trust model for the role: service or oidc."
+  type        = string
+  default     = "service"
+
+  validation {
+    condition     = contains(["service", "oidc"], var.trust_type)
+    error_message = "trust_type must be service or oidc."
+  }
+}
+
+variable "oidc_provider_arn" {
+  description = "IAM OIDC provider ARN used for federated trust."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "oidc_issuer_url" {
+  description = "EKS OIDC issuer URL, including https://."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "oidc_subject" {
+  description = "Exact OIDC subject allowed to assume this role."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "oidc_audience" {
+  description = "Expected OIDC audience."
+  type        = string
+  default     = "sts.amazonaws.com"
+}
