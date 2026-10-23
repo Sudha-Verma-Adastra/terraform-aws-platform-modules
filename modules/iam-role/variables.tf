@@ -13,12 +13,19 @@ variable "role_name" {
 }
 
 variable "service_principal" {
-  description = "AWS service allowed to assume the role, such as lambda.amazonaws.com."
+  description = "AWS service principal for service-based trust."
   type        = string
+  default     = "lambda.amazonaws.com"
 
   validation {
-    condition     = can(regex("^[a-z0-9.-]+\\.amazonaws\\.com$", var.service_principal))
-    error_message = "Provide a valid AWS service principal, such as lambda.amazonaws.com."
+    condition = (
+      var.trust_type != "service" ||
+      can(regex(
+        "^[a-z0-9.-]+\\.amazonaws\\.com(\\.cn)?$",
+        var.service_principal
+      ))
+    )
+    error_message = "For service trust, service_principal must be a valid AWS service principal."
   }
 }
 
