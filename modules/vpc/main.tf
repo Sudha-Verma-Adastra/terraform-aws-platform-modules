@@ -1,3 +1,5 @@
+data "aws_region" "current" {}
+
 locals {
   common_tags = merge(
     {
@@ -21,6 +23,11 @@ locals {
       cidr_block        = var.private_subnet_cidrs[index]
     }
   }
+
+  nat_gateway_subnets = var.nat_gateway_mode == "single" ? {
+    for index, subnet in local.public_subnets :
+    index => subnet if index == "0"
+  } : local.public_subnets
 
   all_subnet_cidrs = concat(
     var.public_subnet_cidrs,
@@ -110,6 +117,13 @@ resource "aws_vpc" "this" {
       error_message = "Subnet CIDR blocks must not be duplicated."
     }
     precondition {
+      condition = (
+        length(var.public_subnet_cidrs) == length(var.availability_zones) &&
+        length(var.private_subnet_cidrs) == length(var.availability_zones)
+      )
+      error_message = "Provide exactly one public and one private subnet CIDR per Availability Zone."
+    }
+    precondition {
       condition     = local.subnet_cidrs_are_within_vpc
       error_message = "Every subnet CIDR must be contained within the VPC CIDR."
     }
@@ -195,4 +209,164 @@ resource "aws_route_table_association" "private" {
 
   subnet_id      = each.value.id
   route_table_id = aws_route_table.private[each.key].id
+}
+
+
+resource "aws_eip" "nat" {
+  for_each = var.enable_nat_gateway ? local.nat_gateway_subnets : {}
+
+  domain = "vpc"
+
+  tags = merge(local.common_tags, {
+    Name = "${var.name}-nat-eip-${each.value.availability_zone}"
+  })
+}
+
+resource "aws_nat_gateway" "this" {
+  for_each = var.enable_nat_gateway ? local.nat_gateway_subnets : {}
+
+  allocation_id = aws_eip.nat[each.key].id
+  subnet_id     = aws_subnet.public[each.key].id
+
+  tags = merge(local.common_tags, {
+    Name = "${var.name}-nat-${each.value.availability_zone}"
+  })
+
+  depends_on = [
+    aws_internet_gateway.this
+  ]
+}
+
+resource "aws_route" "private_nat" {
+  for_each = var.enable_nat_gateway ? local.private_subnets : {}
+
+  route_table_id = aws_route_table.private[each.key].id
+
+  destination_cidr_block = "0.0.0.0/0"
+
+  nat_gateway_id = var.nat_gateway_mode == "single" ? (
+    aws_nat_gateway.this["0"].id
+    ) : (
+    aws_nat_gateway.this[each.key].id
+  )
+}
+
+resource "aws_vpc_endpoint" "s3" {
+  count = var.enable_s3_endpoint ? 1 : 0
+
+  vpc_id            = aws_vpc.this.id
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
+  vpc_endpoint_type = "Gateway"
+
+  route_table_ids = concat(
+    [aws_route_table.public.id],
+    [for route_table in aws_route_table.private : route_table.id]
+  )
+
+  tags = merge(local.common_tags, {
+    Name = "${var.name}-s3-endpoint"
+  })
+}
+
+locals {
+  endpoint_client_cidrs = length(var.endpoint_allowed_cidrs) > 0 ? (
+    var.endpoint_allowed_cidrs
+  ) : var.private_subnet_cidrs
+}
+
+resource "aws_security_group" "vpc_endpoints" {
+  for_each = (
+    var.enable_ecr_endpoints ||
+    var.enable_cloudwatch_logs_endpoint ||
+    var.enable_sts_endpoint
+  ) ? { enabled = true } : {}
+
+  name_prefix = "${var.name}-vpce-"
+  description = "Allow HTTPS from approved VPC clients to interface endpoints"
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description = "HTTPS from approved client CIDRs"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = local.endpoint_client_cidrs
+  }
+
+  egress {
+    description = "Allow endpoint response traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${var.name}-vpce-sg"
+  })
+}
+
+resource "aws_vpc_endpoint" "ecr_api" {
+  count = var.enable_ecr_endpoints ? 1 : 0
+
+  vpc_id            = aws_vpc.this.id
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.ecr.api"
+  vpc_endpoint_type = "Interface"
+  subnet_ids        = values(aws_subnet.private)[*].id
+  security_group_ids = [
+    aws_security_group.vpc_endpoints["enabled"].id
+  ]
+  private_dns_enabled = true
+
+  tags = merge(local.common_tags, {
+    Name = "${var.name}-ecr-api-endpoint"
+  })
+}
+
+resource "aws_vpc_endpoint" "ecr_dkr" {
+  count = var.enable_ecr_endpoints ? 1 : 0
+
+  vpc_id            = aws_vpc.this.id
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.ecr.dkr"
+  vpc_endpoint_type = "Interface"
+  subnet_ids        = values(aws_subnet.private)[*].id
+  security_group_ids = [
+    aws_security_group.vpc_endpoints["enabled"].id
+  ]
+  private_dns_enabled = true
+
+  tags = merge(local.common_tags, {
+    Name = "${var.name}-ecr-dkr-endpoint"
+  })
+}
+
+
+resource "aws_vpc_endpoint" "cloudwatch_logs" {
+  count = var.enable_cloudwatch_logs_endpoint ? 1 : 0
+
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${data.aws_region.current.name}.logs"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = values(aws_subnet.private)[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints["enabled"].id]
+  private_dns_enabled = true
+
+  tags = merge(local.common_tags, {
+    Name = "${var.name}-cloudwatch-logs-endpoint"
+  })
+}
+
+resource "aws_vpc_endpoint" "sts" {
+  count = var.enable_sts_endpoint ? 1 : 0
+
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${data.aws_region.current.name}.sts"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = values(aws_subnet.private)[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints["enabled"].id]
+  private_dns_enabled = true
+
+  tags = merge(local.common_tags, {
+    Name = "${var.name}-sts-endpoint"
+  })
 }

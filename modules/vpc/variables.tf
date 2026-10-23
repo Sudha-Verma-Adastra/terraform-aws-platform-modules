@@ -68,3 +68,59 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+
+variable "enable_nat_gateway" {
+  description = "Whether to create NAT Gateway resources."
+  type        = bool
+  default     = false
+}
+
+variable "nat_gateway_mode" {
+  description = "NAT deployment mode: single or per_az."
+  type        = string
+  default     = "single"
+
+  validation {
+    condition     = contains(["single", "per_az"], var.nat_gateway_mode)
+    error_message = "nat_gateway_mode must be single or per_az."
+  }
+}
+
+variable "enable_s3_endpoint" {
+  description = "Whether to create the S3 Gateway VPC endpoint."
+  type        = bool
+  default     = false
+}
+
+variable "enable_ecr_endpoints" {
+  description = "Whether to create ECR API and Docker interface endpoints."
+  type        = bool
+  default     = false
+}
+
+variable "enable_cloudwatch_logs_endpoint" {
+  description = "Whether to create the CloudWatch Logs interface endpoint."
+  type        = bool
+  default     = false
+}
+
+variable "enable_sts_endpoint" {
+  description = "Whether to create the STS interface endpoint."
+  type        = bool
+  default     = false
+}
+
+variable "endpoint_allowed_cidrs" {
+  description = "CIDR blocks allowed to connect to interface endpoints over HTTPS. Defaults to private subnet CIDRs when empty."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for cidr in var.endpoint_allowed_cidrs :
+      can(cidrnetmask(cidr))
+    ])
+    error_message = "Every endpoint_allowed_cidrs entry must be a valid IPv4 CIDR."
+  }
+}
