@@ -38,3 +38,13 @@ output "node_group_arn" {
   description = "ARN of the managed node group."
   value       = aws_eks_node_group.this.arn
 }
+
+output "cluster_oidc_issuer_url" {
+  description = "OIDC issuer URL for IAM Roles for Service Accounts (IRSA)."
+  value       = aws_eks_cluster.this.identity[0].oidc[0].issuer
+}
+
+output "cluster_oidc_provider_arn" {
+  description = "ARN of the IAM OIDC provider used for EKS IRSA."
+  value       = aws_iam_openid_connect_provider.this.arn
+}
