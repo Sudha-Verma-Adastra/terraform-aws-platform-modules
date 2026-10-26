@@ -20,9 +20,12 @@ variable "service_principal" {
   validation {
     condition = (
       var.trust_type != "service" ||
-      length(trimspace(var.service_principal)) > 0
+      can(regex(
+        "^[a-z0-9-]+\\.amazonaws\\.com(\\.cn)?$",
+        var.service_principal
+      ))
     )
-    error_message = "service_principal must not be empty when trust_type is service."
+    error_message = "service_principal must be a valid AWS service principal when trust_type is service."
   }
 }
 
