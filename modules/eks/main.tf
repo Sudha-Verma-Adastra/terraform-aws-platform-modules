@@ -22,54 +22,71 @@ data "aws_iam_policy_document" "node_assume_role" {
   }
 }
 
+data "aws_iam_role" "existing_cluster" {
+  count = var.create_iam_roles ? 0 : 1
+  name  = var.existing_cluster_role_name
+}
+
+data "aws_iam_role" "existing_node" {
+  count = var.create_iam_roles ? 0 : 1
+  name  = var.existing_node_role_name
+}
+
 resource "aws_iam_role" "cluster" {
+  count              = var.create_iam_roles ? 1 : 0
   name               = "${var.cluster_name}-cluster-role"
   assume_role_policy = data.aws_iam_policy_document.cluster_assume_role.json
 
   tags = merge(
-    {
-      ManagedBy = "Terraform"
-    },
+    { ManagedBy = "Terraform" },
     var.tags
   )
 }
 
 resource "aws_iam_role_policy_attachment" "cluster_policy" {
-  role       = aws_iam_role.cluster.name
+  count      = var.create_iam_roles ? 1 : 0
+  role       = aws_iam_role.cluster[0].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
 
 resource "aws_iam_role" "node" {
+  count              = var.create_iam_roles ? 1 : 0
   name               = "${var.cluster_name}-node-role"
   assume_role_policy = data.aws_iam_policy_document.node_assume_role.json
 
   tags = merge(
-    {
-      ManagedBy = "Terraform"
-    },
+    { ManagedBy = "Terraform" },
     var.tags
   )
 }
 
 resource "aws_iam_role_policy_attachment" "node_worker_policy" {
-  role       = aws_iam_role.node.name
+  count      = var.create_iam_roles ? 1 : 0
+  role       = aws_iam_role.node[0].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
 }
 
 resource "aws_iam_role_policy_attachment" "node_ecr_policy" {
-  role       = aws_iam_role.node.name
+  count      = var.create_iam_roles ? 1 : 0
+  role       = aws_iam_role.node[0].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
 resource "aws_iam_role_policy_attachment" "node_cni_policy" {
-  role       = aws_iam_role.node.name
+  count      = var.create_iam_roles ? 1 : 0
+  role       = aws_iam_role.node[0].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+}
+
+locals {
+  cluster_role_arn = var.create_iam_roles ? aws_iam_role.cluster[0].arn : data.aws_iam_role.existing_cluster[0].arn
+  node_role_arn    = var.create_iam_roles ? aws_iam_role.node[0].arn : data.aws_iam_role.existing_node[0].arn
 }
 
 resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
   version  = var.cluster_version
-  role_arn = aws_iam_role.cluster.arn
+  role_arn = local.cluster_role_arn
 
   access_config {
     authentication_mode                         = "API_AND_CONFIG_MAP"
@@ -106,7 +123,7 @@ resource "aws_eks_cluster" "this" {
 resource "aws_eks_node_group" "this" {
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = var.node_group_name
-  node_role_arn   = aws_iam_role.node.arn
+  node_role_arn   = local.node_role_arn
   subnet_ids      = var.node_subnet_ids
 
   instance_types = var.instance_types
@@ -132,9 +149,7 @@ resource "aws_eks_node_group" "this" {
   )
 
   depends_on = [
-    aws_iam_role_policy_attachment.node_worker_policy,
-    aws_iam_role_policy_attachment.node_ecr_policy,
-    aws_iam_role_policy_attachment.node_cni_policy
+    aws_iam_role_policy_attachment.cluster_policy
   ]
 }
 

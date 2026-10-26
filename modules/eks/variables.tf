@@ -180,3 +180,21 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "create_iam_roles" {
+  description = "Whether this module should create EKS cluster and node IAM roles."
+  type        = bool
+  default     = true
+}
+
+variable "existing_cluster_role_name" {
+  description = "Name of the existing EKS cluster IAM role when create_iam_roles is false."
+  type        = string
+  default     = "eksClusterRole"
+}
+
+variable "existing_node_role_name" {
+  description = "Name of the existing EKS node IAM role when create_iam_roles is false."
+  type        = string
+  default     = "AmazonEKSNodeRole"
+}

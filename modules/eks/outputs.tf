@@ -19,16 +19,6 @@ output "cluster_certificate_authority_data" {
   sensitive   = true
 }
 
-output "cluster_iam_role_arn" {
-  description = "ARN of the EKS control-plane IAM role."
-  value       = aws_iam_role.cluster.arn
-}
-
-output "node_iam_role_arn" {
-  description = "ARN of the worker-node IAM role."
-  value       = aws_iam_role.node.arn
-}
-
 output "node_group_name" {
   description = "Name of the managed node group."
   value       = aws_eks_node_group.this.node_group_name
@@ -47,4 +37,14 @@ output "cluster_oidc_issuer_url" {
 output "cluster_oidc_provider_arn" {
   description = "ARN of the IAM OIDC provider used for EKS IRSA."
   value       = aws_iam_openid_connect_provider.this.arn
+}
+
+output "cluster_iam_role_arn" {
+  description = "IAM role ARN used by the EKS control plane."
+  value       = local.cluster_role_arn
+}
+
+output "node_iam_role_arn" {
+  description = "IAM role ARN used by the EKS node group."
+  value       = local.node_role_arn
 }
