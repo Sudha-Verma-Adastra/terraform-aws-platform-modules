@@ -12,21 +12,11 @@ variable "role_name" {
   }
 }
 
-variable "service_principal" {
-  description = "AWS service principal for service-based role trust."
-  type        = string
-  default     = "lambda.amazonaws.com"
-
-  validation {
-    condition = (
-      var.trust_type != "service" ||
-      can(regex(
-        "^[a-z0-9-]+\\.amazonaws\\.com(\\.cn)?$",
-        var.service_principal
-      ))
-    )
-    error_message = "service_principal must be a valid AWS service principal when trust_type is service."
-  }
+validation {
+  condition = (
+    var.trust_type != "service" ||
+    length(var.service_principal) > 0
+  )
 }
 
 variable "managed_policy_arns" {
