@@ -12,11 +12,15 @@ variable "role_name" {
   }
 }
 
-validation {
-  condition = (
-    var.trust_type != "service" ||
-    length(var.service_principal) > 0
-  )
+variable "service_principal" {
+  description = "AWS service principal trusted by this role."
+  type        = string
+  default     = "lambda.amazonaws.com"
+
+  validation {
+    condition     = length(trimspace(var.service_principal)) > 0
+    error_message = "service_principal must not be empty."
+  }
 }
 
 variable "managed_policy_arns" {
